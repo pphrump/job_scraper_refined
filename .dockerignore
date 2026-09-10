@@ -1,0 +1,34 @@
+# Version control
+.git
+.gitignore
+
+# Python caches
+**/__pycache__
+**/*.py[cod]
+**/*.pyo
+
+# uv / pip caches
+.venv
+uv-cache/
+*.egg-info/
+
+# Dev / build artifacts
+images/
+*.md
+LICENSE*
+
+# Legacy build scripts (no longer needed)
+build-*.sh
+build-*.ps1
+run_*.sh
+run_*.ps1
+setup_*.sh
+setup_*.ps1
+Dockerfile.pip
+Dockerfile.poetry
+requirements.txt
+poetry.lock
+
+# OS noise
+.DS_Store
+Thumbs.db

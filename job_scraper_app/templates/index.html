@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Job Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+   
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container">  <!-- Changed from container-fluid to container -->
+            <a class="navbar-brand" href="/">Job Scraper</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" style="text-align:right">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Search Jobs</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/jobs">View Jobs</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/resume">View Resume</a></li>
+                    <li class="nav-item"><a class="nav-link" href="https://www.erieri.com/cost-of-living-comparison" target="_blank" rel="noopener">Cost of Living</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="main-content">
+        {% if warning_message %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            {{ warning_message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}    
+        <div class="form-container">
+            <h1>Job Scraper</h1>
+            <form method="POST" onsubmit="showLoading()">
+                <div class="form-grid">
+                    <!-- Row 1 -->
+                    <div class="form-group">
+                        <label for="site_name">Site(s):</label>
+                        <input type="text" id="site_name" name="site_name" placeholder="indeed, linkedin">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="search_term">Search Term:</label>
+                        <input type="text" id="search_term" name="search_term" required>
+                    </div>
+
+                    <!-- Row 2 -->
+                    <div class="form-group">
+                        <label for="location">Location (comma-separated):</label>
+                        <input type="text" id="location" name="location" placeholder="TX, US, ID, US or Highlands Ranch, CO" required>
+                    </div>
+
+                    <div class="form-group checkbox-field">
+                        <input class="form-check-input" type="checkbox" id="is_remote" name="is_remote" value="on">
+                        <label for="is_remote">Search for remote jobs (USA)</label>
+                    </div>
+
+                    <!-- Row 3 -->
+                    <div class="form-group">
+                        <label for="results_wanted">No. Results Wanted:</label>
+                        <input type="number" id="results_wanted" name="results_wanted" min="1" step="1" required 
+                            data-bs-toggle="tooltip" title="Enter a whole number (e.g., 10, 50, 100)">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="hours_old">Hours Old:</label>
+                        <input type="number" id="hours_old" name="hours_old" min="1" step="1" required
+                            data-bs-toggle="tooltip" title="Enter a whole number (e.g., 24, 48, 72)">
+                    </div>
+
+                    <!-- Row 4 -->
+                    <div class="form-group">
+                        <label for="min_hourly">Min Hourly Rate ($):</label>
+                        <input type="number" id="min_hourly" name="min_hourly" step="0.01">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="min_annual">Min Annual Salary ($):</label>
+                        <input type="number" id="min_annual" name="min_annual">
+                    </div>
+
+                    <!-- Row 5 (Full Width) -->
+                    <div class="form-group full-width">
+                        <label for="excluded_job_types">Excluded Job Types (comma-separated):</label>
+                        <input type="text" id="excluded_job_types" name="excluded_job_types" placeholder="contract, part-time, temporary">
+                    </div>
+
+                    <!-- Row 6 (Full Width) -->
+                    <div class="form-group full-width">
+                        <label for="excluded_titles">Excluded Titles (comma-separated):</label>
+                        <textarea id="excluded_titles" name="excluded_titles" rows="2">{{ excluded_titles_default }}</textarea>
+                    </div>
+
+                    <!-- Submit Button (Full Width) -->
+                    <div class="form-group full-width">
+                        <button type="submit">Submit</button>
+                    </div>
+                </div>
+            </form>
+            
+            <div id="loading" style="display:none; text-align:center; margin-top: 10px;">
+                <p>Please wait, processing your request...</p>
+                <img src="{{ url_for('static', filename='spinner.gif') }}" alt="Loading...">
+            </div>
+            <!-- Download & Message Results Block (Moved inside card) -->
+            {% if message %}
+            <div class="result-message alert alert-info mt-3" role="alert">
+                {{ message }}
+            </div>
+            {% endif %}
+
+            {% if success %}
+            <div class="result-message alert alert-success mt-3" role="alert">
+                Filtered jobs saved to <a href="{{ url_for('download_csv', filename=csv_filename) }}" class="alert-link">{{ csv_filename }}</a>.
+            </div>
+            {% endif %}
+        </div>
+            
+    </div>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

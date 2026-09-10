@@ -1,0 +1,26 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      # Live-reload app code without rebuilding the image during development.
+      - ./job_scraper_app:/app/job_scraper_app
+      # Persist uploaded resumes and generated CSV files across container restarts.
+      - resume_data:/app/job_scraper_app/resume
+      - output_data:/app/job_scraper_app/files
+    environment:
+      - FLASK_APP=job_scraper_app/app.py
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+      - API_NINJAS_KEY=${API_NINJAS_KEY:-}
+      - OPENEI_API_KEY=${OPENEI_API_KEY:-}
+      - EIA_API_KEY=${EIA_API_KEY:-}
+      - HUD_FMR_API_TOKEN=${HUD_FMR_API_TOKEN:-}
+      - BEA_API_KEY=${BEA_API_KEY:-}
+
+volumes:
+  resume_data:
+  output_data:

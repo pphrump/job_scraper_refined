@@ -1,0 +1,44 @@
+# ── Secrets ──────────────────────────────────────────────────────────────
+# Never commit real credentials. Only .env.example (with placeholders) is tracked.
+.env
+.env.*
+!.env.example
+
+# ── Python ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv / pip caches
+uv-cache/
+.uv/
+
+# ── App-generated / user data ───────────────────────────────────────────
+# Uploaded resumes and generated CSVs are runtime data (also stored in
+# Docker named volumes) — keep the folders in git, ignore their contents.
+job_scraper_app/resume/*
+!job_scraper_app/resume/.gitkeep
+job_scraper_app/files/*
+!job_scraper_app/files/.gitkeep
+
+# Cached cost-of-living lookups (regenerated automatically at runtime)
+job_scraper_app/col_cache.db
+
+# Logs
+*.log
+
+# ── OS / Editor noise ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

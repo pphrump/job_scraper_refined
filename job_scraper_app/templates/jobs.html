@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Listings</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container"> 
+            <a class="navbar-brand" href="/">Job Scraper</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" style="text-align:right">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Search Jobs</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/jobs">View Jobs</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/resume">View Resume</a></li>
+                    <li class="nav-item"><a class="nav-link" href="https://www.erieri.com/cost-of-living-comparison" target="_blank">Cost of Living</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="container mt-3">
+        {% if error_message %}
+        <div class="alert alert-warning" role="alert">
+            {{ error_message }}
+        </div>
+        {% endif %}
+        <div class="row mb-3">
+            <div class="col-md-4 d-flex-gap">
+                <label for="compare-resume" class="mb-0">Compare with Resume</label>
+                <input type="checkbox" id="compare-resume">
+            </div>
+        </div>
+        <h2 class="text-center">Job Listings</h2>
+        <!-- Filters -->
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <input type="text" class="form-control" id="filter-city" placeholder="Filter by city">
+            </div>
+            <div class="col-md-3">
+                <input type="text" class="form-control" id="filter-company" placeholder="Filter by company">
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" id="filter-date">
+            </div>
+            <div class="col-md-2">
+                <input type="text" class="form-control" id="filter-site" placeholder="Filter by job search site">
+            </div>
+            <div class="col-md-1 align-items-center">
+                <label for="filter-remote" class="mb-0">Remote</label>
+                <input type="checkbox" id="filter-remote" data-bs-toggle="tooltip" title="Filter for remote jobs" style="margin-left: 20px;">
+            </div>
+            
+        </div>
+        <!-- Jobs Found -->
+        <div class="row mb-2">
+            <div class="col">
+                <p id="job-count" class="fw-bold">Jobs Found: {{ jobs|length }}</p>
+            </div>
+        </div>
+        <!-- Job Cards -->
+        <div class="row" id="job-container">
+            {% for job in jobs %}
+            <div class="col-md-4 job-card" data-job-id="{{ job['id'] }}" data-city="{{ job['location'] }}" data-company="{{ job['company'] }}" data-date="{{ job['date_posted'] }}" data-site="{{ job['site'] }}" data-remote="{{ job['is_remote']}}">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title title-case">{{ job['title'] }}</h5>
+                        <p class="card-subtitle mb-2 title-case">Site:{{ job['site'] }}</p>
+                        <p class="card-text-light">Date posted: 
+                            {% if job['date_posted'] is string %}
+                                {{ job['date_posted'] }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </p>
+                        {% if job['company'] is string and job['company']|trim %}
+                            <p class="card-text">
+                                Company: {{ job['company'] }}
+                                <!-- Icon to open company info modal -->
+                                <a href="#" data-bs-toggle="modal" data-bs-target="#companyInfoModal{{ loop.index }}">
+                                    <i class="bi bi-info-circle" style="color: #007bff; cursor: pointer;"></i>
+                                </a>
+                            </p>
+                        {% else %}
+                            <p class="card-text">Company: Not specified</p>
+                        {% endif %}
+                        <p class="card-text">
+                            Location: 
+                            {% if job['location'] is string %}
+                                {{ job['location']}}
+                                <span>&nbsp;</span>
+                                <a href="#" class="climate-link" data-location="{{ job['location'] }}" data-bs-toggle="modal" data-bs-target="#climateModal"><i class="bi bi-cloud-sun" style="color: #007bff; cursor: pointer;"></i></a>
+                                <span>&nbsp;</span>
+                                {% if ',' in job['location'] and job['location'].split(',') | length > 1 %}
+                                    <a href="#" class="col-compare-link" data-location="{{ job['location'] }}" data-salary-min="{{ job['min_amount'] if job['min_amount'] is number else '' }}" data-salary-max="{{ job['max_amount'] if job['max_amount'] is number else '' }}" data-interval="{{ job['interval'] if job['interval'] is string else '' }}" data-bs-toggle="modal" data-bs-target="#colCompareModal" title="Compare true cost of living / take-home pay"><i class="bi bi-currency-dollar" style="color: #198754; cursor: pointer;"></i></a>
+                                {% else %}
+                                    <i class="bi bi-currency-dollar" style="color: #6c757d;" title="Cost of living compare not available for this location format"></i>
+                                {% endif %}
+                                <span>&nbsp;</span>
+                                {% if ',' in job['location'] and job['location'].split(',') | length > 1 %}
+                                    <a href="https://www.neighborhoodscout.com/{{ job['location'].split(',')[1].strip().lower() }}/{{ job['location'].split(',')[0].replace(' ', '-').lower() }}/crime" target="_blank"><i class="bi bi-shield-exclamation" style="color: #007bff; cursor: pointer;"></i></a>
+                                {% else %}
+                                    <i class="bi bi-shield-exclamation" style="color: #6c757d;" title="Crime data not available for this location format"></i>
+                                {% endif %}
+                                <!-- <a href="https://www.google.com/search?q=crime+data+{{ job['location'] }}" target="_blank"><i class="bi bi-shield-exclamation" style="color: #007bff; cursor: pointer;"></i></a> -->
+                                <span>&nbsp;</span>
+                                {% if ',' in job['location'] and job['location'].split(',') | length > 1 %}
+                                    <a href="https://www.apartments.com/{{ job['location'].split(',')[0].replace(' ', '-').lower() }}-{{ job['location'].split(',')[1].strip().lower() }}/" target="_blank">
+                                        🏠
+                                    </a>
+                                {% else %}
+                                    <span style="color: #6c757d;" title="Housing data not available for this location format">🏠</span>
+                                {% endif %}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </p>
+                        <p class="card-text">
+                            Salary
+                            {% if job['interval'] and job['interval'] is string and job['interval'].lower() in ['yearly', 'hourly'] %}
+                                ({{ job['interval'] }}):
+                            {% endif %}
+                            {% if job['min_amount'] is number %}
+                                {% set min_salary = job['min_amount'] | round(2) | int %}
+                                {% if min_salary > 0 %}
+                                    Min: ${{ min_salary | string }}
+                                {% endif %}
+                            {% endif %}
+                            {% if job['max_amount'] is number %}
+                                {% set max_salary = job['max_amount'] | round(2) | int %}
+                                {% if max_salary > 0 %}
+                                    Max: ${{ max_salary | string }}
+                                {% endif %}
+                            {% endif %}
+                        </p>
+                        <div class="row mt-2">
+                            <div class="col-6">
+                                {% set job_link = job['job_url_direct'] if job['job_url_direct'] is string and job['job_url_direct']|trim and job['job_url_direct'] != 'nan' else (job['job_url'] if job['job_url'] is string and job['job_url']|trim and job['job_url'] != 'nan' else '') %}
+                                {% if job_link %}
+                                    <a href="{{ job_link }}" class="btn btn-primary w-100 mt-2" target="_blank">View Job</a>
+                                {% else %}
+                                    <button class="btn btn-secondary w-100 mt-2" data-bs-toggle="modal" data-bs-target="#jobFullModal{{ loop.index }}">View Job</button>
+                                {% endif %}
+                            </div>
+                            <div class="col-6">
+                                <button class="btn btn-primary w-100 mt-2" data-bs-toggle="modal" data-bs-target="#jobDescriptionModal{{ loop.index }}">View Description</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal fade" id="jobDescriptionModal{{ loop.index }}" tabindex="-1" aria-labelledby="jobDescriptionModalLabel{{ loop.index }}" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="jobDescriptionModalLabel{{ loop.index }}">{{ job['site'] }} - Description</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="line-height:1.7; white-space: pre-line;">
+                            {% if job['description'] is string and job['description']|trim %}
+                                {{ job['description'] | safe }}
+                            {% else %}
+                                <p>No description available</p>
+                            {% endif %}
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Full Job Modal (fallback when no direct URL) -->
+            <div class="modal fade" id="jobFullModal{{ loop.index }}" tabindex="-1" aria-labelledby="jobFullModalLabel{{ loop.index }}" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title title-case" id="jobFullModalLabel{{ loop.index }}">{{ job['title'] }}</h5>
+                                <p class="mb-0 text-muted">{{ job['company'] }} &mdash; {{ job['location'] }}</p>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3 d-flex flex-wrap gap-2">
+                                {% if job['date_posted'] is string %}
+                                    <span class="badge bg-secondary">Posted: {{ job['date_posted'] }}</span>
+                                {% endif %}
+                                {% if job['interval'] and job['interval'] is string and job['interval'].lower() in ['yearly', 'hourly'] %}
+                                    <span class="badge bg-info text-dark">
+                                        {{ job['interval'] | capitalize }}
+                                        {% if job['min_amount'] is number and job['min_amount'] > 0 %}
+                                            ${{ job['min_amount'] | round | int }}
+                                        {% endif %}
+                                        {% if job['max_amount'] is number and job['max_amount'] > 0 %}
+                                            &ndash; ${{ job['max_amount'] | round | int }}
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
+                                {% if job['is_remote'] %}
+                                    <span class="badge bg-success">Remote</span>
+                                {% endif %}
+                                <span class="badge bg-primary">{{ job['site'] }}</span>
+                            </div>
+                            <hr>
+                            <div class="job-description-body" style="line-height:1.7; white-space: pre-line;">
+                                {% if job['description'] is string and job['description']|trim %}
+                                    {{ job['description'] | safe }}
+                                {% else %}
+                                    <p class="text-muted">No description available.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Company Info Modal -->
+            <div class="modal fade" id="companyInfoModal{{ loop.index }}" tabindex="-1" aria-labelledby="companyInfoModalLabel{{ loop.index }}" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="companyInfoModalLabel{{ loop.index }}">{{ job['company'] }} - Company Info</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" tabindex="-1" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p><strong>Company URL:</strong> 
+                                {% if job['company_url'] is string %}
+                                    <a href="{{ job['company_url'] }}" target="_blank">{{ job['company_url'] }}</a>
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                            <p><strong>Address:</strong> 
+                                {% if job['company_addresses'] is string %}
+                                    {{ job['company_addresses'] }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                            <p><strong>Industry:</strong> 
+                                {% if job['company_industry'] is string %}
+                                    {{ job['company_industry'] }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                            <p><strong>Number of Employees:</strong> 
+                                {% if job['company_num_employees'] is string %}
+                                    {{ job['company_num_employees'] }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                            <p><strong>Revenue:</strong> 
+                                {% if job['company_revenue'] is string %}
+                                    {{ job['company_revenue'] }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                            <p><strong>Description:</strong> 
+                                {% if job['company_description'] is string %}
+                                    {{ job['company_description'] | safe }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Climate Modal -->
+            <div class="modal fade" id="climateModal" tabindex="-1" aria-labelledby="climateModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="climateModalLabel">Climate Information</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" tabindex="-1" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" id="climateModalBody">
+                            <p>Loading climate data...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- True Cost of Living / Net Pay Compare Modal -->
+            <div class="modal fade" id="colCompareModal" tabindex="-1" aria-labelledby="colCompareModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="colCompareModalLabel">True Cost of Living & Take-Home Pay</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" tabindex="-1" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted small">
+                                Estimates net take-home pay and fixed monthly expenses at each location.
+                                Excludes local/municipal income tax, 401(k) employer match, and health insurance premiums;
+                                assumes renting. Figures marked with ~ are estimates, not live data.
+                            </p>
+                            <form class="col-compare-form">
+                                <div class="row">
+                                    <div class="col-md-6 border-end">
+                                        <h6>From (Current)</h6>
+                                        <div class="mb-2">
+                                            <label class="form-label">Location (City, State)</label>
+                                            <input type="text" class="form-control form-control-sm col-from-location" placeholder="e.g. Denver, CO">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label">Annual Salary ($)</label>
+                                            <input type="number" class="form-control form-control-sm col-from-salary" min="0" step="1000" placeholder="e.g. 78000">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>To (Target Job)</h6>
+                                        <div class="mb-2">
+                                            <label class="form-label">Location (City, State)</label>
+                                            <input type="text" class="form-control form-control-sm col-to-location">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label">Annual Salary ($) <span class="text-muted fw-normal">(optional)</span></label>
+                                            <input type="number" class="form-control form-control-sm col-to-salary" min="0" step="1000" placeholder="Leave blank to calculate required salary">
+                                            <div class="form-text col-to-salary-hint" style="display:none;">This listing didn't include a salary. Leave blank and we'll calculate what you'd need to earn here.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3 mt-2">
+                                    <label class="form-label">401(k) Contribution: <span class="col-k401-value">10</span>%</label>
+                                    <input type="range" class="form-range col-k401-slider" min="0" max="25" value="10">
+                                </div>
+                                <button type="button" class="btn btn-primary btn-sm col-compare-submit">Compare</button>
+                            </form>
+                            <div class="col-compare-results mt-3" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Modal to upload resume -->
+            <div class="modal fade" id="uploadResumeModal" tabindex="-1" aria-labelledby="uploadResumeModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="uploadResumeModalLabel">Upload Resume</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" tabindex="-1" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="resume-upload-form" action="/upload_resume_compare" method="POST" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label for="resume" class="form-label">Select Resume File</label>
+                                    <input type="file" class="form-control" id="resume" name="resume" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Upload</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='jobs.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
