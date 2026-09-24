@@ -22,8 +22,8 @@ cached_jobs = []
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    ALLOWED_SITES = {"indeed", "glassdoor", "linkedin", "zip_recruiter"}
-    excluded_titles_default = 'Manager, Behavior, Sales, Retail, Temporary, Principal, President, CEO, Nurse, RN'
+    ALLOWED_SITES = {"indeed", "glassdoor", "linkedin"}
+    excluded_titles_default = 'Manager, Behavior, Sales, Retail, Temporary, Principal, President, CEO, Nurse, RN, Physician, Dentist'
     warning_message = None  # Initialize warning message
     common_exclusions_path = os.path.join(app.root_path, 'CommonExclusions.txt')
 
