@@ -2,10 +2,14 @@
 Lightweight persistent cache for the True Cost of Living feature.
 
 Why SQLite instead of an in-memory dict (like climate_utils.LOCATION_CACHE)?
-The Flask dev server runs with debug=True, which reloads the whole process on
-every file save. An in-memory cache gets wiped on every reload, which defeats
-the point of caching against rate-limited free APIs (API Ninjas, OpenEI).
-SQLite survives restarts with zero setup (one file, no server to run).
+The dev server reloads the whole process on every file save (and containers
+restart). An in-memory cache gets wiped each time, which defeats the point of
+caching against rate-limited free APIs (API Ninjas, OpenEI). SQLite survives
+restarts with zero setup (one file, no server to run).
+
+Location: set COL_CACHE_DB to override where the database file lives. The
+Docker image sets it to /data/col_cache.db (a writable volume, since the app
+code directory is read-only there). Without it, the file sits next to app.py.
 
 Usage:
     from utils.col_cache import cache_get, cache_get_stale, cache_set
@@ -20,13 +24,15 @@ import os
 import sqlite3
 import time
 
-DB_PATH = os.path.join(
+DB_PATH = os.environ.get("COL_CACHE_DB") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "col_cache.db"
 )
 
 
 def _get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    # timeout: gunicorn runs several threads, each with its own connection.
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS col_cache (

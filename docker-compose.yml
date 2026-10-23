@@ -1,26 +1,44 @@
+# Default = hardened, no source mount. For live-reload development use:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    image: jobs-scraper:latest
     ports:
-      - "5000:5000"
+      # Localhost only. Remove "127.0.0.1:" to expose on your LAN (then set APP_PASSWORD!).
+      - "127.0.0.1:5000:5000"
     volumes:
-      # Live-reload app code without rebuilding the image during development.
-      - ./job_scraper_app:/app/job_scraper_app
       # Persist uploaded resumes and generated CSV files across container restarts.
       - resume_data:/app/job_scraper_app/resume
       - output_data:/app/job_scraper_app/files
+      # NLTK data + Hugging Face model cache (downloaded on first start).
+      - app_data:/data
+    # Compose reads .env automatically for ${VAR} substitution (same as before).
     environment:
-      - FLASK_APP=job_scraper_app/app.py
-      - FLASK_ENV=development
       - PYTHONUNBUFFERED=1
+      - SECRET_KEY=${SECRET_KEY:-}
+      - APP_USERNAME=${APP_USERNAME:-admin}
+      - APP_PASSWORD=${APP_PASSWORD:-}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - API_NINJAS_KEY=${API_NINJAS_KEY:-}
       - OPENEI_API_KEY=${OPENEI_API_KEY:-}
       - EIA_API_KEY=${EIA_API_KEY:-}
       - HUD_FMR_API_TOKEN=${HUD_FMR_API_TOKEN:-}
       - BEA_API_KEY=${BEA_API_KEY:-}
+    read_only: true           # immutable root filesystem
+    tmpfs:
+      - /tmp                  # gunicorn worker temp files
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    restart: unless-stopped
 
 volumes:
   resume_data:
   output_data:
+  app_data:

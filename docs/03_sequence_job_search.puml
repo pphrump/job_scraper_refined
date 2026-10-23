@@ -1,0 +1,57 @@
+@startuml 03_sequence_job_search
+title Sequence - Job Search and CSV Generation (POST /) then View Jobs (GET /jobs)
+skinparam shadowing false
+autonumber
+actor User
+participant "Browser\n(index.html, main.js)" as B
+participant "Flask app.py" as A
+participant "input_utils" as I
+participant "job_scraper" as S
+participant "python-jobspy" as J
+participant "transformations" as T
+participant "file_utils" as F
+database "files/ (CSV)" as D
+
+User -> B : fill form, submit
+B -> B : showLoading(), encodeInput()
+B -> A : POST / (site_name, search_term, location,\nresults_wanted, hours_old, exclusions, min pay)
+A -> D : delete existing *.csv
+A -> I : sanitize_input() on each field
+A -> A : validate sites (indeed/glassdoor/linkedin), cast ints/floats
+alt invalid numbers
+  A --> B : session error, redirect /
+else valid
+  A -> S : fetch_jobs(term, locations, n, hours, remote, sites)
+  loop each location
+    loop each site
+      S -> J : scrape_jobs(site, term, location, ...)
+      alt success
+        J --> S : DataFrame
+      else ReadTimeout / RequestException / Exception
+        S -> S : record in errors, continue
+      end
+    end
+  end
+  opt multiple sites or locations
+    S -> S : deduplicate_jobs_fuzzy()\n(SequenceMatcher >= 0.85, site priority)
+  end
+  S --> A : DataFrame (or raises)
+  A -> T : normalize_location() per row
+  A -> S : filter_jobs(types, titles)
+  opt min_hourly or min_annual set
+    A -> S : filter_pay()
+  end
+  A -> F : write_to_csv()
+  F -> D : write CSV
+  F --> A : filename
+  A --> B : session success + csv_filename, redirect /
+end
+B -> A : GET /
+A --> B : index.html (download link or error message)
+
+User -> B : click "View Jobs"
+B -> A : GET /jobs
+A -> D : newest CSV -> pandas.read_csv
+A -> A : cached_jobs = records (first column renamed "id")
+A --> B : jobs.html (cards rendered by Jinja2)
+@enduml

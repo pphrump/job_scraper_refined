@@ -1,0 +1,239 @@
+@startuml 01_class_diagram
+title Job Scraper - Module / Class Diagram
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+left to right direction
+skinparam nodesep 25
+skinparam ranksep 60
+skinparam class {
+  BackgroundColor #FDFDFD
+  BorderColor #444
+}
+hide empty members
+
+package "Presentation (Flask)" #E8F1FB {
+  class "app.py" as App <<Flask module>> {
+    + app : Flask
+    + cached_jobs : list<dict>   <<global>>
+    + RESUME_FOLDER : str
+    + ALLOWED_EXTENSIONS : {txt, pdf, docx}
+    --routes--
+    + index() : GET, POST  "/"
+    + jobs() : GET  "/jobs"
+    + download_csv(filename) : "/download_csv/<filename>"
+    + resume() : GET  "/resume"
+    + view_resume(filename) : "/view_resume/<filename>"
+    + upload_resume() : POST  "/upload_resume"
+    + upload_resume_compare() : POST  "/upload_resume_compare"
+    + compare_resume() : POST  "/compare_resume"
+    + get_climate() : GET  "/climate"
+    + col_compare() : POST  "/api/col-compare"
+    --helpers--
+    - compare_resumes_logic() : dict
+    - check_resume() : bool
+    - get_resume_data() : dict
+  }
+
+  class "templates/" as Templates <<Jinja2>> {
+    index.html
+    jobs.html
+    resume_display.html
+  }
+
+  class "static/" as Static <<browser JS/CSS>> {
+    main.js : showLoading(), encodeInput()
+    jobs.js : filterJobs(), updateJobRanking(),\n  COL modal, climate modal, cover-letter btn
+    resume.js : upload / preview resume
+    style.css
+  }
+}
+
+package "Scraping & Filtering" #EAF7EA {
+  class "job_scraper.py" as JobScraper <<module>> {
+    + fetch_jobs(search_term, locations, results_wanted,\n    hours_old, is_remote, site_name) : DataFrame
+    + filter_jobs(jobs, excluded_types, excluded_titles) : DataFrame
+    + filter_pay(jobs, min_hourly, min_annual) : DataFrame
+    + deduplicate_jobs_fuzzy(jobs, site_priority,\n    similarity_threshold=0.85) : DataFrame
+  }
+
+  class "patch_glassdoor.py" as PatchGD <<build-time script>> {
+    Patches jobspy/glassdoor/__init__.py
+    (URL-encode, GraphQL error, CSRF URL)
+  }
+}
+
+package "utils" #FFF6E5 {
+  class "utils/__init__.py" as UtilsInit <<facade>> {
+    re-exports public helpers
+  }
+
+  class "input_utils.py" as InputUtils <<module>> {
+    + sanitize_input(str) : str
+  }
+
+  class "file_utils.py" as FileUtils <<module>> {
+    + write_to_csv(df, term, location, root) : filename
+    + allowed_file(filename, exts) : bool
+  }
+
+  class "transformations.py" as Transformations <<module>> {
+    + TRANSFORMATIONS : list<callable>
+    + normalize_location(city) : str
+    - saint_to_st()
+    - mount_to_mt()
+    - fort_to_ft()
+    - remove_punctuation()
+    - remove_city_suffix()
+  }
+
+  class "download_nltk_data.py" as NltkData <<module>> {
+    + ensure_nltk_data()
+  }
+
+  class "climate_utils.py" as ClimateUtils <<module>> {
+    + LOCATION_CACHE : dict   <<in-memory>>
+    + query_nominatim(city, state) : json
+    + get_lat_lon(city, state) : (lat, lon)
+    + get_climate_data(city, state) : dict
+    + process_climate_data(data, city, state) : dict
+    - safe_avg / safe_max / safe_min
+    - safe_count_min / safe_count_max
+  }
+
+  class "resume_utils.py" as ResumeUtils <<module>> {
+    + sbert_model : SentenceTransformer   <<module-level>>
+    + read_resume(folder, exts) : str
+    + extract_text_from_resume(path) : str
+    + remove_personal_info(text) : str
+    + chunk_text(text, max_words=180, overlap=40) : list
+    + encode_with_chunking(text, model) : ndarray
+    + calculate_similarity_sbert(emb, desc) : float
+    + calculate_similarity(resume, desc) : float   <<TF-IDF>>
+    + compare_jobs_to_resume(jobs, resume_text) : {id: score}
+  }
+
+  class "col_cache.py" as ColCache <<module>> {
+    + DB_PATH : str
+    - _get_conn() : sqlite3.Connection
+    + cache_get(key, max_age_days) : any|None
+    + cache_get_stale(key) : any|None
+    + cache_set(key, value)
+  }
+
+  class "col_utils.py" as ColUtils <<module>> {
+    + FICA_RATE = 0.0765
+    + CONSERVATIVE_FALLBACK : dict
+    + HEALTH_INSURANCE_MONTHLY_EMPLOYEE_SHARE = 120
+    --parsing--
+    + normalize_state(state) : abbr
+    + parse_city_state(location) : (city, abbr)
+    --tax--
+    + get_federal_tax_brackets(year)
+    + get_state_tax_brackets(abbr)
+    + get_state_tax_brackets_live(url)
+    + parse_state_tax_table(table)
+    + check_state_tax_freshness()
+    + calculate_income_tax(gross, abbr)
+    - _progressive_tax(income, brackets)
+    --location data--
+    + get_utility_rate(lat, lon)
+    + get_gas_price(abbr)
+    + get_hud_rent(lat, lon)
+    + get_bea_price_index(lat, lon)
+    + get_auto_insurance_rate(abbr)
+    - _get_county_fips(lat, lon)
+    --engine--
+    - _net_monthly_pay(gross, abbr, k401%)
+    - _get_location_expenses(city, abbr)
+    + calculate_takehome_and_expenses(gross, loc, k401%)
+    + solve_required_salary(...)  <<bisection>>
+    + calculate_equivalent_salary(from, to, ...)
+  }
+
+  class "state_tax_2026.json" as StateTaxJson <<static data>>
+  class "state_auto_insurance_2026.json" as AutoInsJson <<static data>>
+}
+
+package "Operations" #F3E8FA {
+  class "check_state_tax_freshness.py" as FreshnessCli <<CLI script>> {
+    exit 0 = fresh, 1 = stale
+  }
+}
+
+package "Persistence / Storage" #EEEEEE {
+  class "col_cache.db\n(SQLite: col_cache)" as CacheDb <<SQLite>>
+  class "files/  (volume output_data)\nCSV result files" as CsvDir <<directory>>
+  class "resume/  (volume resume_data)\nuploaded resume" as ResumeDir <<directory>>
+  class "CommonExclusions.txt" as ExclFile <<file>>
+}
+
+package "External Services" #FDECEC {
+  hide stereotype
+  class "python-jobspy\n(Indeed / LinkedIn / Glassdoor)" as JobSpy <<external service>>
+  class "Nominatim (OSM)" as Nominatim <<external service>>
+  class "Open-Meteo Archive API" as OpenMeteo <<external service>>
+  class "API Ninjas (federal tax)" as ApiNinjas <<external service>>
+  class "Tax Foundation (state tax scrape)" as TaxFound <<external service>>
+  class "OpenEI URDB (utility rates)" as OpenEI <<external service>>
+  class "EIA (gas prices)" as EIA <<external service>>
+  class "US Census Geocoder (county FIPS)" as Census <<external service>>
+  class "HUD FMR API (rent)" as HUD <<external service>>
+  class "BEA (price parity index)" as BEA <<external service>>
+  class "HuggingFace model hub\nall-MiniLM-L6-v2" as HF <<external service>>
+}
+
+' ---------- Presentation relationships ----------
+App ..> Templates : render_template
+Templates ..> Static : <script>/<link>
+Static ..> App : AJAX (fetch)
+
+' ---------- App dependencies ----------
+App --> JobScraper : fetch_jobs / filter_jobs / filter_pay
+App --> UtilsInit : imports
+App --> ColUtils : calculate_takehome_and_expenses,\ncalculate_equivalent_salary,\nsolve_required_salary
+App ..> ResumeDir : read / write
+App ..> CsvDir : list / delete / read CSV
+App ..> ExclFile : default exclusions
+
+UtilsInit o-- ClimateUtils
+UtilsInit o-- FileUtils
+UtilsInit o-- InputUtils
+UtilsInit o-- ResumeUtils
+UtilsInit o-- NltkData
+UtilsInit o-- Transformations
+
+' ---------- Utils internals ----------
+FileUtils ..> CsvDir : writes CSV
+ColUtils --> ColCache : cache_get / cache_get_stale / cache_set
+ColUtils --> ClimateUtils : get_lat_lon (geocoder reuse)
+ColCache ..> CacheDb : SQL
+ColUtils ..> StateTaxJson : static fallback
+ColUtils ..> AutoInsJson : auto insurance
+FreshnessCli --> ColUtils : check_state_tax_freshness
+
+' ---------- External ----------
+JobScraper ..> JobSpy : scrape_jobs()
+PatchGD ..> JobSpy : patches installed package
+ClimateUtils ..> Nominatim : geocode
+ClimateUtils ..> OpenMeteo : 365d history
+ColUtils ..> ApiNinjas
+ColUtils ..> TaxFound
+ColUtils ..> OpenEI
+ColUtils ..> EIA
+ColUtils ..> Census
+ColUtils ..> HUD
+ColUtils ..> BEA
+ResumeUtils ..> HF : model download (first run)
+
+note right of Static
+  jobs.js calls POST /generate_cover_letter/<id>
+  (Ollama), but no matching route exists in app.py.
+end note
+
+note bottom of ColUtils
+  Reliability tiers per data source:
+  live API -> fresh cache -> stale cache -> hardcoded fallback
+  Result carries a data_quality map so the UI can flag estimates.
+end note
+@enduml

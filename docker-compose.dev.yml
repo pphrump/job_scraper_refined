@@ -1,0 +1,20 @@
+# Development override: live-reload your code without rebuilding.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  app:
+    volumes:
+      # Mounted over the image's copy of the app; the named volumes from
+      # docker-compose.yml still mount on top for resume/ and files/.
+      - ./job_scraper_app:/app/job_scraper_app
+    environment:
+      - LOG_LEVEL=DEBUG
+    command:
+      - gunicorn
+      - --chdir=/app/job_scraper_app
+      - --bind=0.0.0.0:5000
+      - --workers=1
+      - --threads=4
+      - --timeout=300
+      - --reload
+      - --access-logfile=-
+      - app:app

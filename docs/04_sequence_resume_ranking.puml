@@ -1,0 +1,48 @@
+@startuml 04_sequence_resume_ranking
+title Sequence - Resume Upload and Job Ranking (hybrid SBERT + TF-IDF)
+skinparam shadowing false
+autonumber
+actor User
+participant "jobs.js" as JS
+participant "Flask app.py" as A
+participant "file_utils" as F
+database "resume/" as R
+participant "resume_utils" as RU
+participant "SentenceTransformer\n(all-MiniLM-L6-v2)" as M
+participant "scikit-learn\nTF-IDF / cosine" as SK
+
+User -> JS : choose resume, submit modal
+JS -> A : POST /upload_resume_compare (multipart)
+A -> F : allowed_file(txt/pdf/docx)
+alt invalid type
+  A --> JS : 400 Invalid file type
+else valid
+  A -> R : secure_filename + save
+  A -> A : compare_resumes_logic()
+  A -> R : check_resume()
+  A -> RU : read_resume(folder, exts)
+  RU -> RU : extract_text_from_resume()\n(txt / pymupdf / python-docx)
+  RU -> RU : remove_personal_info()\n(email, phone, URL, name)
+  RU --> A : cleaned text
+  A -> RU : compare_jobs_to_resume(cached_jobs, text)
+  RU -> M : encode_with_chunking(resume)\nchunks of 180 words, overlap 40, mean-pooled
+  loop each job
+    alt description missing / NaN
+      RU -> RU : score = 0
+    else
+      RU -> M : encode_with_chunking(description)
+      RU -> RU : sbert_score = cosine * 100
+      RU -> SK : TF-IDF cosine(resume, description) * 100
+      RU -> RU : score = 0.6*SBERT + 0.4*TF-IDF
+    end
+  end
+  RU --> A : {job_id: score}
+  A --> JS : {success, rankings}
+  JS -> JS : updateJobRanking() - badge + re-sort cards
+end
+
+User -> JS : toggle "Compare with Resume"
+JS -> A : POST /compare_resume {compare:true}
+A -> A : compare_resumes_logic() (as above)
+A --> JS : rankings
+@enduml

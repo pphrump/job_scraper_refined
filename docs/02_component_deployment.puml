@@ -1,0 +1,51 @@
+@startuml 02_component_deployment
+title Job Scraper - Component & Deployment View
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+actor User
+
+node "Browser" {
+  component "index.html + main.js" as IdxUI
+  component "jobs.html + jobs.js" as JobsUI
+  component "resume_display.html + resume.js" as ResUI
+}
+
+node "Docker Host" {
+  node "Container: app (python:3.11-slim)\nport 5000 -> 5000" {
+    component "Flask app\n(app.py)" as Flask
+    component "job_scraper.py" as Scraper
+    component "utils.* (climate, resume, col, file, input)" as Utils
+    component "SBERT model\nall-MiniLM-L6-v2" as Sbert
+    component "NLTK data" as Nltk
+    database "col_cache.db (SQLite)" as Sqlite
+    artifact ".env keys\nAPI_NINJAS / OPENEI / EIA / HUD / BEA" as Env
+  }
+  storage "Volume: output_data\n/app/job_scraper_app/files" as VolOut
+  storage "Volume: resume_data\n/app/job_scraper_app/resume" as VolRes
+  folder "Bind mount ./job_scraper_app\n(live reload in dev)" as Bind
+}
+
+cloud "Job boards via python-jobspy" as Boards
+cloud "Geo / weather\nNominatim, Open-Meteo, Census" as Geo
+cloud "Cost-of-living data\nAPI Ninjas, Tax Foundation, OpenEI,\nEIA, HUD, BEA" as ColApis
+
+User --> IdxUI
+User --> JobsUI
+User --> ResUI
+IdxUI --> Flask : HTTP form POST /
+JobsUI --> Flask : AJAX\n/compare_resume, /upload_resume_compare,\n/climate, /api/col-compare
+ResUI --> Flask : /upload_resume, /view_resume
+Flask --> Scraper
+Flask --> Utils
+Utils --> Sbert
+Utils --> Nltk
+Utils --> Sqlite
+Flask --> VolOut
+Flask --> VolRes
+Env ..> Utils : os.environ
+Bind ..> Flask
+Scraper --> Boards
+Utils --> Geo
+Utils --> ColApis
+@enduml

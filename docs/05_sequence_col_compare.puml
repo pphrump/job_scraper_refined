@@ -1,0 +1,44 @@
+@startuml 05_sequence_col_compare
+title Sequence - Cost-of-Living Comparison (POST /api/col-compare)
+skinparam shadowing false
+autonumber
+actor User
+participant "jobs.js\n($ modal)" as JS
+participant "Flask app.py" as A
+participant "col_utils" as C
+participant "col_cache\n(SQLite)" as K
+participant "climate_utils" as CL
+participant "External APIs" as X
+
+User -> JS : enter current salary, from-city, 401k %, optional target salary
+JS -> A : POST /api/col-compare {from:{salary,location,k401},to:{location,salary?}}
+A -> A : validate JSON (400 on bad input)
+A -> C : calculate_takehome_and_expenses(from)
+group For one location (also reused for target)
+  C -> C : parse_city_state()
+  C -> C : _net_monthly_pay()
+  C -> X : federal brackets (API Ninjas)
+  note right of C
+    Every lookup follows:
+    cache_get(fresh) -> live API ->
+    cache_get_stale -> hardcoded fallback
+  end note
+  C -> K : cache_get / cache_set
+  C -> X : state brackets (Tax Foundation scrape -> static JSON)
+  C -> C : _get_location_expenses()
+  C -> CL : get_lat_lon() via Nominatim
+  C -> X : HUD rent, BEA price index, OpenEI electricity,\nEIA gas, Census county FIPS
+  C -> C : state auto insurance (JSON) + health insurance constant
+  C --> A : net pay, expenses, disposable, data_quality
+end
+alt target salary supplied (mode = actual_salary)
+  A -> C : calculate_takehome_and_expenses(to_salary, to_location)
+  A -> C : solve_required_salary(current disposable, ...)
+else not supplied (mode = solved_salary)
+  A -> C : calculate_equivalent_salary(from, to)
+  C -> C : solve_required_salary()  (bisection on gross salary)
+  C -> C : recompute target at solved salary
+end
+A --> JS : {current, target, net_monthly_difference,\nmode, required_salary_to_match}
+JS --> User : side-by-side breakdown, live recalculation on edits
+@enduml

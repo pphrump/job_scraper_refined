@@ -1,0 +1,32 @@
+# Secrets and personal data must never end up in the image
+.env
+.env.*
+!.env.example
+job_scraper_app/resume/
+job_scraper_app/files/
+# Local runtime cache (the container keeps its own in /data)
+job_scraper_app/col_cache.db*
+**/*.pdf
+**/*.docx
+
+# Dev / VCS cruft (note: **/ is needed to match nested folders)
+.git
+.gitignore
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.idea
+.vscode
+
+# Not needed in the image
+Dockerfile
+docker-compose.yml
+docker-compose.dev.yml
+README.md
+images/
+docs/
+ATTRIBUTION.md
+LICENSE.md
+patch_glassdoor.py

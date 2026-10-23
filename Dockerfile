@@ -1,62 +1,84 @@
 # syntax=docker/dockerfile:1.7
 
+ARG PYTHON_VERSION=3.12
+ARG UV_VERSION=0.11.7
+
+# Pinned uv (no ":latest"). For fully reproducible builds also pin the base
+# images by digest, e.g. python:3.12-slim@sha256:... (see `docker buildx imagetools inspect`).
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 # ── Builder ────────────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+FROM python:${PYTHON_VERSION}-slim AS builder
 
-# Pull the uv binary directly from the official image — no pip, no curl needed.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 
-# Build-time system libs required by lxml etc.
-# These stay in the builder only; the runtime image uses the compiled wheels.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        build-essential \
-        libxml2-dev \
-        libxslt1-dev \
-        libffi-dev \
-        libssl-dev && \
-    rm -rf /var/lib/apt/lists/*
+# No compiler or -dev packages: every dependency in uv.lock installs from a
+# prebuilt wheel (verified with `uv pip install --no-build`). If you add a
+# package that only ships an sdist, the build will fail loudly instead of
+# silently compiling.
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 
-# Copy dependency manifest (and lock file if present) first so Docker can
-# cache the install layer independently of application code changes.
-COPY pyproject.toml uv.lock* ./
+# uv.lock is REQUIRED (generate it with `uv lock` and commit it). --frozen makes
+# the build fail if the lock and pyproject.toml disagree, so transitive
+# dependencies can't drift between builds.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev --no-cache
 
-# Install all dependencies into the project virtualenv.
-# --frozen: use the lock file exactly (omit on the first run before uv.lock exists).
-# --no-install-project: skip installing the app itself (it has no importable package).
-RUN uv sync --no-install-project --no-cache
-
-# Now copy application code.
 COPY job_scraper_app ./job_scraper_app/
 
 # ── Runtime ────────────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
-# Runtime-only shared libraries needed by lxml / pymupdf .
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libxml2 \
-        libxslt1.1 \
-        libffi-dev \
-        libstdc++6 && \
-    rm -rf /var/lib/apt/lists/*
+# lxml and pymupdf wheels bundle their own native libraries, so no apt packages
+# are needed here. If startup ever fails with a missing .so, add that one package.
+
+# Unprivileged user. HOME=/data is the only writable location besides the two
+# data folders below (NLTK data, Hugging Face model cache, etc.).
+RUN groupadd --system --gid 10001 app && \
+    useradd --system --uid 10001 --gid app --home-dir /data --no-create-home \
+            --shell /usr/sbin/nologin app
 
 WORKDIR /app
 
-# Bring in the populated virtualenv and app code from the builder.
+# Code and virtualenv stay root-owned (read-only to the app user).
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/job_scraper_app ./job_scraper_app/
 
-# Activate the virtualenv for all subsequent RUN / CMD calls.
+# Writable runtime data only.
+RUN mkdir -p /app/job_scraper_app/files /app/job_scraper_app/resume \
+             /data/nltk_data /data/hf && \
+    chown -R app:app /app/job_scraper_app/files /app/job_scraper_app/resume /data
+
 ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOME=/data \
+    NLTK_DATA=/data/nltk_data \
+    HF_HOME=/data/hf \
+    COL_CACHE_DB=/data/col_cache.db
 
-    # Apply Glassdoor patch
-COPY patch_glassdoor.py /tmp/patch_glassdoor.py
-RUN python /tmp/patch_glassdoor.py
+# NOTE: secrets (.env) are NOT copied into the image. Supply them at runtime:
+#   docker compose up        (uses env_file: .env)
+#   docker run --env-file .env ...
 
+USER app
 EXPOSE 5000
 
-CMD ["python", "job_scraper_app/app.py"]
+# Start period is generous because sentence-transformers loads on startup.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=3).status == 200 else 1)"]
+
+# ONE worker on purpose: app.py keeps per-process state (cached_jobs) and loads
+# an embedding model, so extra workers would break /compare_resume and use
+# lots of RAM. Threads handle concurrency. Long timeout because scraping is slow.
+CMD ["gunicorn", \
+     "--chdir", "/app/job_scraper_app", \
+     "--bind", "0.0.0.0:5000", \
+     "--workers", "1", "--threads", "4", \
+     "--timeout", "300", \
+     "--access-logfile", "-", \
+     "app:app"]
